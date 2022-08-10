@@ -9,14 +9,14 @@ resolver = "2"
 opt-level = "s"
 
 [profile.dev]
-debug = true # Symbols are nice and they don't increase the size on Flash
+debug = true    # Symbols are nice and they don't increase the size on Flash
 opt-level = "z"
 
 [features]
 pio = ["esp-idf-sys/pio"]
 
 [dependencies]
-esp-idf-sys = { version = "0.31.6", features = ["binstart"] }
+esp-idf-sys = { version = "0.31", features = ["binstart"] }
 esp-idf-hal = "0.38"
 fontdue = "0.7"
 
@@ -25,5 +25,5 @@ component_dirs = ["epdiy/src/epd_driver"]
 bindings_header = "epdiy/src/epd_driver/include/epd_driver.h"
 
 [build-dependencies]
-embuild = "0.29"
+embuild = "0.30"
 anyhow = "1"
