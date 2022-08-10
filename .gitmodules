@@ -1,0 +1,3 @@
+[submodule "epdiy"]
+	path = epdiy
+	url = https://github.com/vroland/epdiy

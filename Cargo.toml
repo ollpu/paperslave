@@ -1,0 +1,27 @@
+[package]
+name = "paperslave"
+version = "0.1.0"
+authors = ["Roope Salmi <rpsalmi@gmail.com>"]
+edition = "2021"
+resolver = "2"
+
+[profile.release]
+opt-level = "s"
+
+[profile.dev]
+debug = true # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+pio = ["esp-idf-sys/pio"]
+
+[dependencies]
+esp-idf-sys = { version = "0.31.6", features = ["binstart"] }
+
+[[package.metadata.esp-idf-sys.extra_components]]
+component_dirs = ["epdiy/src/epd_driver"]
+bindings_header = "epdiy/src/epd_driver/include/epd_driver.h"
+
+[build-dependencies]
+embuild = "0.29"
+anyhow = "1"
