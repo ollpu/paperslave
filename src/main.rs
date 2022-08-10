@@ -1,12 +1,33 @@
-use esp_idf_sys::{self as _, EpdInitOptions_EPD_OPTIONS_DEFAULT, epd_init, epd_set_rotation, EpdRotation_EPD_ROT_LANDSCAPE, epd_clear, epd_clear_area_cycles, epd_full_screen, epd_poweroff, epd_poweron};
+use esp_idf_sys as _;
+
+use esp_idf_hal::peripherals::Peripherals;
+
+mod paper;
+use crate::paper::{Paper, PaperPeripherals};
 
 fn main() {
-    println!("Hello, world!");
-    unsafe {
-        epd_init(EpdInitOptions_EPD_OPTIONS_DEFAULT);
-        epd_set_rotation(EpdRotation_EPD_ROT_LANDSCAPE);
-        epd_poweron();
-        epd_clear();
-        epd_poweroff();
-    }
+    let peripherals = Peripherals::take().unwrap();
+
+    let pins = peripherals.pins;
+    let rmt = peripherals.rmt;
+    let mut paper = Paper::init(PaperPeripherals {
+        gpio0: pins.gpio0,
+        gpio2: pins.gpio2,
+        gpio4: pins.gpio4,
+        gpio5: pins.gpio5,
+        gpio15: pins.gpio15,
+        gpio18: pins.gpio18,
+        gpio19: pins.gpio19,
+        gpio21: pins.gpio21,
+        gpio22: pins.gpio22,
+        gpio23: pins.gpio23,
+        gpio25: pins.gpio25,
+        gpio26: pins.gpio26,
+        gpio27: pins.gpio27,
+        gpio32: pins.gpio32,
+        gpio33: pins.gpio33,
+        rmt_channel1: rmt.channel1,
+    });
+
+    paper.powered_on().clear();
 }

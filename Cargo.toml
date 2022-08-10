@@ -17,6 +17,8 @@ pio = ["esp-idf-sys/pio"]
 
 [dependencies]
 esp-idf-sys = { version = "0.31.6", features = ["binstart"] }
+esp-idf-hal = "0.38"
+fontdue = "0.7"
 
 [[package.metadata.esp-idf-sys.extra_components]]
 component_dirs = ["epdiy/src/epd_driver"]
