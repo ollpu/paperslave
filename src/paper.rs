@@ -1,5 +1,10 @@
 use esp_idf_hal::{gpio::*, rmt};
-use esp_idf_sys::{epd_init, epd_set_rotation, EpdInitOptions_EPD_OPTIONS_DEFAULT, EpdRotation_EPD_ROT_LANDSCAPE, epd_clear, epd_poweron, epd_poweroff};
+use esp_idf_sys::{
+    epd_clear, epd_clear_area, epd_init, epd_poweroff, epd_poweron, epd_set_rotation,
+    EpdInitOptions_EPD_OPTIONS_DEFAULT, EpdRotation_EPD_ROT_LANDSCAPE,
+};
+
+pub use esp_idf_sys::EpdRect;
 
 pub struct PaperPeripherals {
     pub gpio0: Gpio0<Unknown>,
@@ -20,7 +25,6 @@ pub struct PaperPeripherals {
     pub rmt_channel1: rmt::CHANNEL1,
     // also uses i2s, not sure how that maps to the ones exposed in esp-idf-hal
 }
-
 
 pub struct Paper(PaperPeripherals);
 
@@ -47,6 +51,12 @@ impl<'a> PaperPowerOn<'a> {
     pub fn clear(&mut self) {
         unsafe {
             epd_clear();
+        }
+    }
+
+    pub fn clear_area(&mut self, area: EpdRect) {
+        unsafe {
+            epd_clear_area(area);
         }
     }
 }

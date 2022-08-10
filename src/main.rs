@@ -29,5 +29,10 @@ fn main() {
         rmt_channel1: rmt.channel1,
     });
 
-    paper.powered_on().clear();
+    paper.powered_on().clear_area(paper::EpdRect {
+        x: 200,
+        y: 200,
+        width: 200,
+        height: 200,
+    });
 }
