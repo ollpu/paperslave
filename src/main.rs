@@ -2,8 +2,11 @@ use esp_idf_sys as _;
 
 use esp_idf_hal::peripherals::Peripherals;
 
-mod paper;
-use crate::paper::{Paper, PaperPeripherals};
+pub mod paper;
+use paper::{Paper, PaperPeripherals};
+
+pub mod fb;
+use fb::Framebuffer;
 
 fn main() {
     let peripherals = Peripherals::take().unwrap();
@@ -29,10 +32,9 @@ fn main() {
         rmt_channel1: rmt.channel1,
     });
 
-    paper.powered_on().clear_area(paper::EpdRect {
-        x: 200,
-        y: 200,
-        width: 200,
-        height: 200,
-    });
+    let mut framebuffer = Framebuffer::new();
+    framebuffer.text(fb::Paint::Darken, 150, 150, 80., "Hello::<World>");
+    let mut p = paper.powered_on();
+    p.clear();
+    p.draw_framebuffer(&framebuffer);
 }
