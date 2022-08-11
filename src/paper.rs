@@ -1,8 +1,8 @@
 use esp_idf_hal::{gpio::*, rmt};
 use esp_idf_sys::{
-    c_types, epd_clear, epd_clear_area, epd_full_screen, epd_init, epd_poweroff, epd_poweron,
-    epd_set_rotation, epdiy_ED047TC1, EpdDrawError, EpdDrawError_EPD_DRAW_SUCCESS, EpdDrawMode,
-    EpdDrawMode_MODE_EPDIY_WHITE_TO_GL16, EpdDrawMode_MODE_PACKING_2PPB,
+    c_types, epd_clear, epd_clear_area, epd_deinit, epd_full_screen, epd_init, epd_poweroff,
+    epd_poweron, epd_set_rotation, epdiy_ED047TC1, EpdDrawError, EpdDrawError_EPD_DRAW_SUCCESS,
+    EpdDrawMode, EpdDrawMode_MODE_EPDIY_WHITE_TO_GL16, EpdDrawMode_MODE_PACKING_2PPB,
     EpdDrawMode_PREVIOUSLY_WHITE, EpdInitOptions_EPD_OPTIONS_DEFAULT,
     EpdRotation_EPD_ROT_LANDSCAPE, EpdWaveform,
 };
@@ -47,6 +47,14 @@ impl Paper {
             epd_poweron();
         }
         PaperPowerOn(self)
+    }
+}
+
+impl Drop for Paper {
+    fn drop(&mut self) {
+        unsafe {
+            epd_deinit();
+        }
     }
 }
 
