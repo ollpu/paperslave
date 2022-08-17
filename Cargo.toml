@@ -25,6 +25,9 @@ lazy_static = "1.4"
 component_dirs = ["epdiy/src/epd_driver"]
 bindings_header = "epdiy/src/epd_driver/include/epd_driver.h"
 
+[package.metadata.espflash]
+partition_table = "partitions.csv"
+
 [build-dependencies]
 embuild = "0.30"
 anyhow = "1"
