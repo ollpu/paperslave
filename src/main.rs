@@ -1,9 +1,11 @@
+use std::{thread, time::Duration};
+
 use esp_idf_sys as _;
 
 use esp_idf_hal::peripherals::Peripherals;
 
 pub mod paper;
-use paper::{Paper, PaperPeripherals};
+use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
 
 pub mod fb;
 use fb::Framebuffer;
@@ -32,9 +34,22 @@ fn main() {
         rmt_channel1: rmt.channel1,
     });
 
-    let mut framebuffer = Framebuffer::new();
-    framebuffer.text(fb::Paint::Darken, 150, 150, 80., "Hello::<World>");
+    // Avoid leaving display in indeterminate state when using cargo-espflash.
+    // Disabled in release mode because of the 2s time budget.
+    #[cfg(debug_assertions)]
+    thread::sleep(Duration::from_millis(1000));
+
+    let draw_worker = thread::Builder::new()
+        .stack_size(6 * 1024)
+        .spawn(|| {
+            let mut framebuffer = Framebuffer::new();
+            framebuffer.text(fb::Paint::Darken, 150, 300, 80., "Hello::<World>");
+            PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
+        })
+        .unwrap();
+
     let mut p = paper.powered_on();
-    p.clear();
-    p.draw_framebuffer(&framebuffer);
+    p.quick_clear();
+    let prepared = draw_worker.join().unwrap();
+    p.draw(&prepared);
 }
