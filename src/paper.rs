@@ -1,12 +1,12 @@
 use esp_idf_hal::{gpio::*, rmt};
 use esp_idf_sys::{
-    c_types, epd_clear, epd_clear_area, epd_clear_area_cycles, epd_deinit, epd_draw_base,
-    epd_full_screen, epd_init, epd_poweroff, epd_poweron, epd_set_rotation, epdiy_ED047TC1,
-    EpdDrawError, EpdDrawError_EPD_DRAW_SUCCESS, EpdDrawMode, EpdDrawMode_MODE_DU,
+    epd_clear, epd_clear_area, epd_clear_area_cycles, epd_deinit, epd_draw_base, epd_full_screen,
+    epd_init, epd_poweroff, epd_poweron, epd_set_rotation, epdiy_ED047TC1,
+    EpdDrawError_EPD_DRAW_SUCCESS, EpdDrawMode, EpdDrawMode_MODE_DU,
     EpdDrawMode_MODE_EPDIY_BLACK_TO_GL16, EpdDrawMode_MODE_EPDIY_WHITE_TO_GL16,
     EpdDrawMode_MODE_GC16, EpdDrawMode_MODE_GL16, EpdDrawMode_MODE_PACKING_2PPB,
     EpdDrawMode_PREVIOUSLY_WHITE, EpdInitOptions_EPD_OPTIONS_DEFAULT,
-    EpdRotation_EPD_ROT_LANDSCAPE, EpdWaveform,
+    EpdRotation_EPD_ROT_LANDSCAPE,
 };
 
 pub use esp_idf_sys::EpdRect;
