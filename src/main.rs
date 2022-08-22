@@ -43,7 +43,7 @@ fn main() {
         .stack_size(6 * 1024)
         .spawn(|| {
             let mut framebuffer = Framebuffer::new();
-            framebuffer.text(fb::Paint::Darken, 150, 300, 80., "Hello::<World>");
+            framebuffer.text(fb::Paint::Darken, 10, 530, 320., "00:00");
             PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
         })
         .unwrap();
