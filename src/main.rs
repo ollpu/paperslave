@@ -76,6 +76,8 @@ fn find_counter_partition() -> esp_partition_t {
     }
 }
 
+/* Monotonically increasing counter implementation which minimizes the use of the expensive flash
+ * erase operation. */
 fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
     let size = partition.size;
 
@@ -84,13 +86,18 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
         esp_partition_read(partition, 0, buffer.as_mut_ptr() as *mut c_void, size);
     }
 
+    /* First 4 bytes of the counter are a base value. */
     let base = u32::from_be_bytes(buffer[0..4].try_into().unwrap());
 
+    /* The rest is an offset that will be added to the base value. The offset is implemented as a
+     * unary counter where every increment flips one bit from 1 to 0. When all the bits are fully
+     * flipped, the offset region is reset and the base value is updated. */
     let offset_region = &buffer[4..];
     let unary_head_index = offset_region.partition_point(|&x| x == 0);
     let unary_bits_head_byte;
 
     match offset_region.get(unary_head_index) {
+        /* Increase the offset unary counter by one bit. */
         Some(&head_byte) => {
             unary_bits_head_byte = head_byte.leading_zeros();
 
@@ -105,6 +112,7 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
                 );
             }
         }
+        /* The offset unary counter is already full, reset it and update base. */
         None => {
             unary_bits_head_byte = 0;
 
