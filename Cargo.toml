@@ -20,6 +20,7 @@ esp-idf-sys = { version = "0.31", features = ["binstart"] }
 esp-idf-hal = "0.38"
 rusttype = "0.9"
 lazy_static = "1.4"
+embedded-hal = "0.2"
 
 [[package.metadata.esp-idf-sys.extra_components]]
 component_dirs = ["epdiy/src/epd_driver"]

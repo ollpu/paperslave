@@ -1,8 +1,9 @@
-use std::{thread, time::Duration};
+use std::thread;
 
 use esp_idf_sys as _;
 
-use esp_idf_hal::peripherals::Peripherals;
+use embedded_hal::blocking::delay::DelayMs;
+use esp_idf_hal::{delay::Ets, peripherals::Peripherals};
 
 pub mod paper;
 use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
@@ -37,7 +38,11 @@ fn main() {
     // Avoid leaving display in indeterminate state when using cargo-espflash.
     // Disabled in release mode because of the 2s time budget.
     #[cfg(debug_assertions)]
-    thread::sleep(Duration::from_millis(1000));
+    {
+        println!("waiting for debug delay");
+        Ets.delay_ms(3000_u32);
+        println!("wait over");
+    }
 
     let draw_worker = thread::Builder::new()
         .stack_size(6 * 1024)
