@@ -53,8 +53,15 @@ fn main() {
     let draw_worker = thread::Builder::new()
         .stack_size(6 * 1024)
         .spawn(|| {
+            let counter = find_counter_partition();
+            let timestamp = read_and_increment_counter(&counter);
+            let minute_of_day = timestamp % 1440;
+            let hour = minute_of_day / 60;
+            let minute = minute_of_day % 60;
+            let time_string = format!("{:02}:{:02}", hour, minute);
+
             let mut framebuffer = Framebuffer::new();
-            framebuffer.text(fb::Paint::Darken, 10, 330, 430., "00:00");
+            framebuffer.text(fb::Paint::Darken, 10, 330, 430., &time_string);
             PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
         })
         .unwrap();
