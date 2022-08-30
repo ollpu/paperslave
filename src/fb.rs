@@ -6,7 +6,7 @@ pub const HEIGHT: i32 = 540;
 pub const WHITE: u8 = u8::MAX;
 pub const BLACK: u8 = u8::MIN;
 
-static FONT_DATA: &[u8] = include_bytes!("../font/Spinnaker-Regular.subset.ttf") as &[u8];
+static FONT_DATA: &[u8] = include_bytes!("../font/Lato-Bold.subset.ttf") as &[u8];
 
 pub struct Framebuffer {
     data: Vec<u8>,
