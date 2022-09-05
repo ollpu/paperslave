@@ -1,10 +1,7 @@
-use std::{
-    ffi::{c_void, CString},
-    thread,
-};
+use std::ffi::{c_void, CString};
 
 use embedded_hal::blocking::delay::DelayMs;
-use esp_idf_hal::{delay::Ets, peripherals::Peripherals};
+use esp_idf_hal::{cpu::Core, delay::Ets, peripherals::Peripherals};
 use esp_idf_sys::{
     self as _, esp_partition_erase_range, esp_partition_find_first, esp_partition_read,
     esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_ANY, esp_partition_t,
@@ -16,6 +13,8 @@ use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
 
 pub mod fb;
 use fb::Framebuffer;
+
+pub mod thread;
 
 fn main() {
     let peripherals = Peripherals::take().unwrap();
@@ -50,21 +49,18 @@ fn main() {
         println!("wait over");
     }
 
-    let draw_worker = thread::Builder::new()
-        .stack_size(6 * 1024)
-        .spawn(|| {
-            let counter = find_counter_partition();
-            let timestamp = read_and_increment_counter(&counter);
-            let minute_of_day = timestamp % 1440;
-            let hour = minute_of_day / 60;
-            let minute = minute_of_day % 60;
-            let time_string = format!("{:02}:{:02}", hour, minute);
+    let draw_worker = thread::spawn(Core::Core1, || {
+        let counter = find_counter_partition();
+        let timestamp = read_and_increment_counter(&counter);
+        let minute_of_day = timestamp % 1440;
+        let hour = minute_of_day / 60;
+        let minute = minute_of_day % 60;
+        let time_string = format!("{:02}:{:02}", hour, minute);
 
-            let mut framebuffer = Framebuffer::new();
-            framebuffer.text(fb::Paint::Darken, 10, 330, 430., &time_string);
-            PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
-        })
-        .unwrap();
+        let mut framebuffer = Framebuffer::new();
+        framebuffer.text(fb::Paint::Darken, 10, 330, 430., &time_string);
+        PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
+    });
 
     let mut p = paper.powered_on();
     p.quick_clear();
