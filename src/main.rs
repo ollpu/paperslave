@@ -12,7 +12,7 @@ pub mod paper;
 use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
 
 pub mod fb;
-use fb::Framebuffer;
+use fb::{Framebuffer, Paint};
 
 pub mod thread;
 
@@ -58,7 +58,8 @@ fn main() {
         let time_string = format!("{:02}:{:02}", hour, minute);
 
         let mut framebuffer = Framebuffer::new();
-        framebuffer.text(fb::Paint::Darken, 10, 330, 430., &time_string);
+        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 400, 430., &time_string);
+        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 100, 80., "Aikamme");
         PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
     });
 

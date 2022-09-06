@@ -60,21 +60,34 @@ impl Framebuffer {
         }
     }
 
-    pub fn text(&mut self, paint: Paint, x: i32, y: i32, size: f32, content: &str) {
+    // Draw text centered horizontally. Vertically aligned to the baseline.
+    pub fn text_centered(&mut self, paint: Paint, x: i32, y: i32, size: f32, content: &str) {
         let scale = Scale::uniform(size);
-        let glyphs = FONT.layout(
-            content,
-            scale,
-            Point {
-                x: x as f32,
-                y: y as f32,
-            },
-        );
-        for glyph in glyphs {
+
+        let v_metrics = FONT.v_metrics(scale);
+        let glyphs: Vec<_> = FONT
+            .layout(content, scale, Point { x: 0., y: 0. })
+            .collect();
+
+        let glyphs_width = {
+            let min_x = glyphs
+                .first()
+                .map(|g| g.pixel_bounding_box().unwrap().min.x)
+                .unwrap();
+            let max_x = glyphs
+                .last()
+                .map(|g| g.pixel_bounding_box().unwrap().max.x)
+                .unwrap();
+            (max_x - min_x) as i32
+        };
+
+        let x = x - glyphs_width / 2;
+
+        for glyph in &glyphs {
             if let Some(bounding_box) = glyph.pixel_bounding_box() {
                 glyph.draw(|inner_x, inner_y, val| {
-                    let actual_x = inner_x as i32 + bounding_box.min.x;
-                    let actual_y = inner_y as i32 + bounding_box.min.y;
+                    let actual_x = inner_x as i32 + bounding_box.min.x + x;
+                    let actual_y = inner_y as i32 + bounding_box.min.y + y;
                     let val = (val * 255.) as u8;
                     self.paint(paint, actual_x, actual_y, val);
                 });
