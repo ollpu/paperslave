@@ -7,6 +7,7 @@ use esp_idf_sys::{
     esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_ANY, esp_partition_t,
     esp_partition_type_t_ESP_PARTITION_TYPE_ANY, esp_partition_write,
 };
+use chrono::NaiveDateTime;
 
 pub mod paper;
 use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
@@ -51,15 +52,18 @@ fn main() {
 
     let draw_worker = thread::spawn(Core::Core1, || {
         let counter = find_counter_partition();
-        let timestamp = read_and_increment_counter(&counter);
-        let minute_of_day = timestamp % 1440;
-        let hour = minute_of_day / 60;
-        let minute = minute_of_day % 60;
-        let time_string = format!("{:02}:{:02}", hour, minute);
+        let value = read_and_increment_counter(&counter);
+
+        let timestamp: i64 = value.into();
+        let time = NaiveDateTime::from_timestamp(60 * timestamp, 0);
+
+        let time_string = time.format("%H:%M").to_string();
+        let date_string = time.format("%-d.%-m.%Y").to_string();
 
         let mut framebuffer = Framebuffer::new();
-        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 400, 430., &time_string);
-        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 100, 80., "Aikamme");
+        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 96, 90., "Aikamme");
+        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 405, 454., &time_string);
+        framebuffer.text_centered(Paint::Darken, fb::WIDTH / 2, 500, 90., &date_string);
         PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
     });
 

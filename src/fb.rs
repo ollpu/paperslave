@@ -69,19 +69,17 @@ impl Framebuffer {
             .layout(content, scale, Point { x: 0., y: 0. })
             .collect();
 
-        let glyphs_width = {
-            let min_x = glyphs
-                .first()
-                .map(|g| g.pixel_bounding_box().unwrap().min.x)
-                .unwrap();
-            let max_x = glyphs
-                .last()
-                .map(|g| g.pixel_bounding_box().unwrap().max.x)
-                .unwrap();
-            (max_x - min_x) as i32
-        };
+        let min_x = glyphs
+            .first()
+            .map(|g| g.pixel_bounding_box().unwrap().min.x)
+            .unwrap();
+        let max_x = glyphs
+            .last()
+            .map(|g| g.pixel_bounding_box().unwrap().max.x)
+            .unwrap();
+        let glyphs_width = max_x - min_x;
 
-        let x = x - glyphs_width / 2;
+        let x = x - glyphs_width / 2 - min_x;
 
         for glyph in &glyphs {
             if let Some(bounding_box) = glyph.pixel_bounding_box() {
