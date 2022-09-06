@@ -55,7 +55,19 @@ fn main() {
         let value = read_and_increment_counter(&counter);
 
         let timestamp: i64 = value.into();
-        let time = NaiveDateTime::from_timestamp(60 * timestamp, 0);
+        let mut time = NaiveDateTime::from_timestamp(60 * timestamp, 0);
+
+        // Advance time up to a point given at compile time. This will only call
+        // `reset_and_write_counter` once after flashing, and normal operation will resume
+        // afterwards. Cannot be used to decrease the stored timestamp.
+        if let Some(set_time) = option_env!("PAPERSLAVE_ADVANCE_TIME") {
+            let set_time = NaiveDateTime::parse_from_str(set_time, "%Y-%m-%d %H:%M").unwrap();
+            if set_time > time {
+                time = set_time;
+                let value = set_time.timestamp() / 60;
+                reset_and_write_counter(&counter, value.try_into().unwrap());
+            }
+        }
 
         let time_string = time.format("%H:%M").to_string();
         let date_string = time.format("%-d.%-m.%Y").to_string();
@@ -125,18 +137,20 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
             unary_bits_head_byte = 0;
 
             let new_base = base + (size - 4) * 8 + 1;
-            unsafe {
-                esp_partition_erase_range(partition, 0, size);
-                esp_partition_write(
-                    partition,
-                    0,
-                    new_base.to_be_bytes().as_ptr() as *const c_void,
-                    4,
-                );
-            }
+            reset_and_write_counter(partition, new_base);
         }
     }
 
     let offset = unary_head_index as u32 * 8 + unary_bits_head_byte;
     return base + offset;
+}
+
+/// Overwrite counter in a way that **does not** conserve flash erase cycles.
+///
+/// Should not be used repeatedly.
+fn reset_and_write_counter(partition: &esp_partition_t, value: u32) {
+    unsafe {
+        esp_partition_erase_range(partition, 0, partition.size);
+        esp_partition_write(partition, 0, value.to_be_bytes().as_ptr() as *const c_void, 4);
+    }
 }
