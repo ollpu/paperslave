@@ -1,13 +1,13 @@
 use std::ffi::{c_void, CString};
 
+use chrono::NaiveDateTime;
 use embedded_hal::blocking::delay::DelayMs;
 use esp_idf_hal::{cpu::Core, delay::Ets, peripherals::Peripherals};
 use esp_idf_sys::{
     self as _, esp_partition_erase_range, esp_partition_find_first, esp_partition_read,
     esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_ANY, esp_partition_t,
-    esp_partition_type_t_ESP_PARTITION_TYPE_ANY, esp_partition_write,
+    esp_partition_type_t_ESP_PARTITION_TYPE_ANY, esp_partition_write, EspError,
 };
-use chrono::NaiveDateTime;
 
 pub mod paper;
 use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
@@ -65,7 +65,7 @@ fn main() {
             if set_time > time {
                 time = set_time;
                 let value = set_time.timestamp() / 60;
-                reset_and_write_counter(&counter, value.try_into().unwrap());
+                set_counter(&counter, value.try_into().unwrap());
             }
         }
 
@@ -96,15 +96,13 @@ fn find_counter_partition() -> esp_partition_t {
     }
 }
 
-/* Monotonically increasing counter implementation which minimizes the use of the expensive flash
- * erase operation. */
+/// Monotonically increasing counter implementation which minimizes the use of the expensive flash
+/// erase operation.
 fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
     let size = partition.size;
 
     let mut buffer = vec![0_u8; size as usize];
-    unsafe {
-        esp_partition_read(partition, 0, buffer.as_mut_ptr() as *mut c_void, size);
-    }
+    partition_read(partition, 0, &mut buffer).unwrap();
 
     /* First 4 bytes of the counter are a base value. */
     let base = u32::from_be_bytes(buffer[0..4].try_into().unwrap());
@@ -123,21 +121,14 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
 
             let new_head_byte = head_byte >> 1;
             let byte_index = 4 + unary_head_index as u32;
-            unsafe {
-                esp_partition_write(
-                    partition,
-                    byte_index,
-                    new_head_byte.to_be_bytes().as_ptr() as *const c_void,
-                    1,
-                );
-            }
+            partition_write(partition, byte_index, &new_head_byte.to_be_bytes()).unwrap();
         }
         /* The offset unary counter is already full, reset it and update base. */
         None => {
             unary_bits_head_byte = 0;
 
             let new_base = base + (size - 4) * 8 + 1;
-            reset_and_write_counter(partition, new_base);
+            set_counter(partition, new_base);
         }
     }
 
@@ -148,9 +139,39 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
 /// Overwrite counter in a way that **does not** conserve flash erase cycles.
 ///
 /// Should not be used repeatedly.
-fn reset_and_write_counter(partition: &esp_partition_t, value: u32) {
+fn set_counter(partition: &esp_partition_t, value: u32) {
+    partition_erase(partition, 0, partition.size).unwrap();
+    partition_write(partition, 0, &value.to_be_bytes()).unwrap();
+}
+
+fn partition_erase(partition: &esp_partition_t, offset: u32, size: u32) -> Result<(), EspError> {
     unsafe {
-        esp_partition_erase_range(partition, 0, partition.size);
-        esp_partition_write(partition, 0, value.to_be_bytes().as_ptr() as *const c_void, 4);
+        return EspError::convert(esp_partition_erase_range(partition, offset, size));
+    }
+}
+
+fn partition_write(partition: &esp_partition_t, offset: u32, data: &[u8]) -> Result<(), EspError> {
+    unsafe {
+        return EspError::convert(esp_partition_write(
+            partition,
+            offset,
+            data.as_ptr() as *const c_void,
+            data.len() as u32,
+        ));
+    }
+}
+
+fn partition_read(
+    partition: &esp_partition_t,
+    offset: u32,
+    buffer: &mut [u8],
+) -> Result<(), EspError> {
+    unsafe {
+        return EspError::convert(esp_partition_read(
+            partition,
+            offset,
+            buffer.as_mut_ptr() as *mut c_void,
+            buffer.len() as u32,
+        ));
     }
 }
