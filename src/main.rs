@@ -2,7 +2,7 @@ use std::ffi::{c_void, CString};
 
 use chrono::NaiveDateTime;
 use embedded_hal::blocking::delay::DelayMs;
-use esp_idf_hal::{cpu::Core, delay::Ets, peripherals::Peripherals};
+use esp_idf_hal::{cpu::Core, delay::FreeRtos, peripherals::Peripherals};
 use esp_idf_sys::{
     self as _, esp_partition_erase_range, esp_partition_find_first, esp_partition_read,
     esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_ANY, esp_partition_t,
@@ -46,7 +46,7 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         println!("waiting for debug delay");
-        Ets.delay_ms(3000_u32);
+        FreeRtos.delay_ms(2000_u32);
         println!("wait over");
     }
 
