@@ -169,6 +169,7 @@ fn main() {
                 std::mem::swap(&mut prev_framebuffer, &mut framebuffer);
                 let mut tries = 0;
                 loop {
+                    FreeRtos.delay_ms(10u32);
                     {
                         let updated_state = worker_state.lock().unwrap();
                         if &*updated_state != &local_state {
@@ -186,7 +187,6 @@ fn main() {
                             continue 'redraw;
                         }
                     }
-                    FreeRtos.delay_ms(10u32);
                 }
             }
         });
