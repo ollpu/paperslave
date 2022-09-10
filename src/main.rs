@@ -134,12 +134,12 @@ fn main() {
                     }
                 }
                 for (part, x, y) in [
-                    (AdjustField::Hours, 380, 200),
-                    (AdjustField::Minutes, 540, 200),
-                    (AdjustField::Days, 270, 320),
-                    (AdjustField::Months, 430, 320),
-                    (AdjustField::Years, 630, 320),
-                    (AdjustField::Store, 460, 450),
+                    (AdjustField::Hours, 400, 200),
+                    (AdjustField::Minutes, 560, 200),
+                    (AdjustField::Days, 290, 320),
+                    (AdjustField::Months, 450, 320),
+                    (AdjustField::Years, 650, 320),
+                    (AdjustField::Store, 480, 450),
                 ] {
                     framebuffer.text_centered(
                         Paint::Darken,
@@ -191,44 +191,54 @@ fn main() {
             }
         });
 
-        let nxt_button = pins.gpio35.into_input().unwrap();
+        let field_button = pins.gpio35.into_input().unwrap();
         let backward_button = pins.gpio34.into_input().unwrap();
         let forward_button = pins.gpio39.into_input().unwrap();
 
-        fn check_press_latch<P: InputPin>(pin: &P) -> bool
+        fn press_latch<P: InputPin>(pin: &P, repeat: bool, mut cb: impl FnMut())
         where
             P::Error: Debug,
         {
             if pin.is_low().unwrap() {
-                while pin.is_low().unwrap() {
-                    FreeRtos.delay_ms(1u32);
+                cb();
+                for _ in 0..50 {
+                    if pin.is_high().unwrap() {
+                        return;
+                    }
+                    FreeRtos.delay_ms(10u32);
                 }
-                true
-            } else {
-                false
+                loop {
+                    if pin.is_high().unwrap() {
+                        return;
+                    }
+                    if repeat {
+                        cb();
+                        FreeRtos.delay_ms(200u32);
+                    } else {
+                        FreeRtos.delay_ms(10u32);
+                    }
+
+                }
             }
         }
 
         loop {
-            if check_press_latch(&nxt_button) {
-                println!("nxt");
+            press_latch(&field_button, false, || {
                 let mut state = state.lock().unwrap();
                 state.field = state.field.cycle();
-            }
-            if check_press_latch(&backward_button) {
-                println!("back");
+            });
+            press_latch(&backward_button, true, || {
                 let mut state = state.lock().unwrap();
                 state.time = adjust(state.field, AdjustDirection::Backward, state.time);
-            }
-            if check_press_latch(&forward_button) {
-                println!("forward");
+            });
+            press_latch(&forward_button, true, || {
                 let mut state = state.lock().unwrap();
                 if matches!(state.field, AdjustField::Store) {
                     // TODO
                 } else {
                     state.time = adjust(state.field, AdjustDirection::Forward, state.time);
                 }
-            }
+            });
             FreeRtos.delay_ms(1u32);
         }
     }
