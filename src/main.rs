@@ -1,7 +1,10 @@
-use std::ffi::{c_void, CString};
+use std::{
+    ffi::{c_void, CString},
+    fmt::Debug,
+};
 
-use chrono::NaiveDateTime;
-use embedded_hal::blocking::delay::DelayMs;
+use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
+use embedded_hal::{blocking::delay::DelayMs, digital::v2::InputPin};
 use esp_idf_hal::{cpu::Core, delay::FreeRtos, peripherals::Peripherals};
 use esp_idf_sys::{
     self as _, esp_partition_erase_range, esp_partition_find_first, esp_partition_read,
@@ -13,7 +16,7 @@ pub mod paper;
 use paper::{DrawMode, Paper, PaperPeripherals, PreparedFramebuffer};
 
 pub mod fb;
-use fb::{Framebuffer, Paint};
+use fb::{Framebuffer, Paint, Rect};
 
 pub mod thread;
 
@@ -79,10 +82,241 @@ fn main() {
         PreparedFramebuffer::prepare(&framebuffer, DrawMode::DirectUpdateBinary)
     });
 
-    let mut p = paper.powered_on();
-    p.quick_clear();
-    let prepared = draw_worker.join().unwrap();
-    p.draw(&prepared);
+    {
+        let mut p = paper.powered_on();
+        p.quick_clear();
+        let prepared = draw_worker.join().unwrap();
+        p.draw(&prepared);
+    }
+
+    FreeRtos.delay_ms(3000_u32);
+
+    {
+        println!("entering adjust mode");
+        #[derive(Clone, PartialEq)]
+        struct State {
+            field: AdjustField,
+            time: NaiveDateTime,
+        }
+
+        let state = std::sync::Arc::new(std::sync::Mutex::new(State {
+            field: AdjustField::Minutes,
+            time: NaiveDateTime::from_timestamp(0, 0),
+        }));
+
+        let worker_state = state.clone();
+        thread::spawn(Core::Core1, move || {
+            paper.powered_on().clear();
+            let mut framebuffer = Framebuffer::new();
+            let mut prev_framebuffer = Framebuffer::new();
+            let mut local_state = worker_state.lock().unwrap().clone();
+            let mut dirty = false;
+            'redraw: loop {
+                framebuffer.clear();
+                const BUTTONS_START: i32 = 240;
+                const BUTTONS_SPACE: i32 = 69;
+                for (i, text) in [Some("RST"), None, Some("NEXT"), Some("-"), Some("+")]
+                    .into_iter()
+                    .enumerate()
+                {
+                    if let Some(text) = text {
+                        let pos = BUTTONS_START + i as i32 * BUTTONS_SPACE;
+                        framebuffer.rect(
+                            Paint::Darken,
+                            Rect {
+                                x: pos - 20,
+                                y: 0,
+                                w: 40,
+                                h: 4,
+                            },
+                        );
+                        framebuffer.text_centered(Paint::Darken, pos, 30, 30., text);
+                    }
+                }
+                for (part, x, y) in [
+                    (AdjustField::Hours, 380, 200),
+                    (AdjustField::Minutes, 540, 200),
+                    (AdjustField::Days, 270, 320),
+                    (AdjustField::Months, 430, 320),
+                    (AdjustField::Years, 630, 320),
+                    (AdjustField::Store, 460, 450),
+                ] {
+                    framebuffer.text_centered(
+                        Paint::Darken,
+                        x,
+                        y,
+                        94.,
+                        &part.format(local_state.time),
+                    );
+                    if part == local_state.field {
+                        framebuffer.rect(
+                            Paint::Darken,
+                            Rect {
+                                x: x - 40,
+                                y: y + 10,
+                                w: 80,
+                                h: 6,
+                            },
+                        );
+                    }
+                }
+                let prepared = PreparedFramebuffer::prepare_difference(
+                    &prev_framebuffer,
+                    &framebuffer,
+                    DrawMode::DirectUpdateBinary,
+                );
+                paper.powered_on().draw(&prepared);
+                std::mem::swap(&mut prev_framebuffer, &mut framebuffer);
+                let mut tries = 0;
+                loop {
+                    {
+                        let updated_state = worker_state.lock().unwrap();
+                        if &*updated_state != &local_state {
+                            local_state = updated_state.clone();
+                            dirty = true;
+                            continue 'redraw;
+                        }
+                    }
+                    if dirty {
+                        tries += 1;
+                        if tries >= 500 {
+                            paper.powered_on().quick_clear();
+                            prev_framebuffer.clear();
+                            dirty = false;
+                            continue 'redraw;
+                        }
+                    }
+                    FreeRtos.delay_ms(10u32);
+                }
+            }
+        });
+
+        let nxt_button = pins.gpio35.into_input().unwrap();
+        let backward_button = pins.gpio34.into_input().unwrap();
+        let forward_button = pins.gpio39.into_input().unwrap();
+
+        fn check_press_latch<P: InputPin>(pin: &P) -> bool
+        where
+            P::Error: Debug,
+        {
+            if pin.is_low().unwrap() {
+                while pin.is_low().unwrap() {
+                    FreeRtos.delay_ms(1u32);
+                }
+                true
+            } else {
+                false
+            }
+        }
+
+        loop {
+            if check_press_latch(&nxt_button) {
+                println!("nxt");
+                let mut state = state.lock().unwrap();
+                state.field = state.field.cycle();
+            }
+            if check_press_latch(&backward_button) {
+                println!("back");
+                let mut state = state.lock().unwrap();
+                state.time = adjust(state.field, AdjustDirection::Backward, state.time);
+            }
+            if check_press_latch(&forward_button) {
+                println!("forward");
+                let mut state = state.lock().unwrap();
+                if matches!(state.field, AdjustField::Store) {
+                    // TODO
+                } else {
+                    state.time = adjust(state.field, AdjustDirection::Forward, state.time);
+                }
+            }
+            FreeRtos.delay_ms(1u32);
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum AdjustField {
+    Minutes,
+    Hours,
+    Days,
+    Months,
+    Years,
+    Store,
+}
+
+#[derive(Clone, Copy)]
+enum AdjustDirection {
+    Forward,
+    Backward,
+}
+
+impl AdjustField {
+    fn cycle(self) -> Self {
+        match self {
+            AdjustField::Minutes => AdjustField::Hours,
+            AdjustField::Hours => AdjustField::Days,
+            AdjustField::Days => AdjustField::Months,
+            AdjustField::Months => AdjustField::Years,
+            AdjustField::Years => AdjustField::Store,
+            AdjustField::Store => AdjustField::Minutes,
+        }
+    }
+
+    fn format(self, datetime: NaiveDateTime) -> String {
+        let format_string = match self {
+            AdjustField::Minutes => "%M",
+            AdjustField::Hours => "%H",
+            AdjustField::Days => "%d",
+            AdjustField::Months => "%m",
+            AdjustField::Years => "%Y",
+            AdjustField::Store => "OK",
+        };
+        datetime.format(format_string).to_string()
+    }
+}
+
+fn adjust(
+    field: AdjustField,
+    direction: AdjustDirection,
+    datetime: NaiveDateTime,
+) -> NaiveDateTime {
+    let mut date = datetime.date();
+    let mut time = datetime.time();
+    let mut overflow_days = 0;
+
+    let adjust_time = match direction {
+        AdjustDirection::Forward => NaiveTime::overflowing_add_signed,
+        AdjustDirection::Backward => NaiveTime::overflowing_sub_signed,
+    };
+    let adjust_date_duration = |date: NaiveDate, duration| {
+        match direction {
+            AdjustDirection::Forward => date.checked_add_signed(duration),
+            AdjustDirection::Backward => date.checked_sub_signed(duration),
+        }
+        .unwrap_or(date)
+    };
+    let adjust_date_months = |date: NaiveDate, months| {
+        match direction {
+            AdjustDirection::Forward => date.checked_add_months(months),
+            AdjustDirection::Backward => date.checked_sub_months(months),
+        }
+        .unwrap_or(date)
+    };
+
+    match field {
+        AdjustField::Minutes => {
+            (time, overflow_days) = adjust_time(&time, chrono::Duration::minutes(1))
+        }
+        AdjustField::Hours => {
+            (time, overflow_days) = adjust_time(&time, chrono::Duration::hours(1))
+        }
+        AdjustField::Days => date = adjust_date_duration(date, chrono::Duration::days(1)),
+        AdjustField::Months => date = adjust_date_months(date, chrono::Months::new(1)),
+        AdjustField::Years => date = adjust_date_months(date, chrono::Months::new(12)),
+        AdjustField::Store => {}
+    }
+    date = adjust_date_duration(date, chrono::Duration::seconds(overflow_days));
+    date.and_time(time)
 }
 
 fn find_counter_partition() -> esp_partition_t {

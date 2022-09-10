@@ -18,11 +18,23 @@ pub enum Paint {
     Lighten,
 }
 
+#[derive(Clone, Copy)]
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub w: i32,
+    pub h: i32,
+}
+
 impl Framebuffer {
     pub fn new() -> Framebuffer {
         Framebuffer {
             data: vec![WHITE; (WIDTH * HEIGHT) as usize],
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.data.fill(WHITE);
     }
 
     pub fn inside(&self, x: i32, y: i32) -> bool {
@@ -60,11 +72,19 @@ impl Framebuffer {
         }
     }
 
-    // Draw text centered horizontally. Vertically aligned to the baseline.
+    pub fn rect(&mut self, paint: Paint, rect: Rect) {
+        let Rect { x, y, w, h } = rect;
+        for p_x in x..(x + w) {
+            for p_y in y..(y + h) {
+                self.paint(paint, p_x, p_y, u8::MAX);
+            }
+        }
+    }
+
+    /// Draw text centered horizontally. Vertically aligned to the baseline.
     pub fn text_centered(&mut self, paint: Paint, x: i32, y: i32, size: f32, content: &str) {
         let scale = Scale::uniform(size);
 
-        let v_metrics = FONT.v_metrics(scale);
         let glyphs: Vec<_> = FONT
             .layout(content, scale, Point { x: 0., y: 0. })
             .collect();

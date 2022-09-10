@@ -4,9 +4,9 @@ use esp_idf_sys::{
     epd_init, epd_poweroff, epd_poweron, epd_set_rotation, epdiy_ED047TC1,
     EpdDrawError_EPD_DRAW_SUCCESS, EpdDrawMode, EpdDrawMode_MODE_DU,
     EpdDrawMode_MODE_EPDIY_BLACK_TO_GL16, EpdDrawMode_MODE_EPDIY_WHITE_TO_GL16,
-    EpdDrawMode_MODE_GC16, EpdDrawMode_MODE_GL16, EpdDrawMode_MODE_PACKING_2PPB,
-    EpdDrawMode_PREVIOUSLY_WHITE, EpdInitOptions_EPD_OPTIONS_DEFAULT,
-    EpdRotation_EPD_ROT_LANDSCAPE,
+    EpdDrawMode_MODE_GC16, EpdDrawMode_MODE_GL16, EpdDrawMode_MODE_PACKING_1PPB_DIFFERENCE,
+    EpdDrawMode_MODE_PACKING_2PPB, EpdDrawMode_PREVIOUSLY_WHITE,
+    EpdInitOptions_EPD_OPTIONS_DEFAULT, EpdRotation_EPD_ROT_LANDSCAPE,
 };
 
 pub use esp_idf_sys::EpdRect;
@@ -74,7 +74,7 @@ pub enum DrawMode {
 
 pub struct PreparedFramebuffer {
     packed: Vec<u8>,
-    mode: DrawMode,
+    mode: EpdDrawMode,
 }
 
 impl<'a> PaperPowerOn<'a> {
@@ -102,9 +102,7 @@ impl<'a> PaperPowerOn<'a> {
                 epd_full_screen(),
                 prepared.packed.as_ptr(),
                 epd_full_screen(),
-                prepared.mode as EpdDrawMode
-                    | EpdDrawMode_MODE_PACKING_2PPB
-                    | EpdDrawMode_PREVIOUSLY_WHITE,
+                prepared.mode,
                 24,
                 core::ptr::null(),
                 &epdiy_ED047TC1 as *const _,
@@ -125,7 +123,7 @@ impl<'a> Drop for PaperPowerOn<'a> {
 }
 
 impl PreparedFramebuffer {
-    pub fn prepare(framebuffer: &Framebuffer, mode: DrawMode) -> PreparedFramebuffer {
+    pub fn prepare(framebuffer: &Framebuffer, draw_mode: DrawMode) -> PreparedFramebuffer {
         // TODO: use 8 bits per byte for binary mode?
         assert!(WIDTH % 2 == 0);
         let mut packed = vec![0; (WIDTH / 2 * HEIGHT) as usize];
@@ -134,7 +132,7 @@ impl PreparedFramebuffer {
                 let packed_idx = (y * (WIDTH / 2) + x) as usize;
                 let l = framebuffer.get(2 * x, y);
                 let r = framebuffer.get(2 * x + 1, y);
-                let (l, r) = if matches!(mode, DrawMode::DirectUpdateBinary) {
+                let (l, r) = if matches!(draw_mode, DrawMode::DirectUpdateBinary) {
                     (15 * (l >> 7), 15 * (r >> 7))
                 } else {
                     (l >> 4, r >> 4)
@@ -143,6 +141,37 @@ impl PreparedFramebuffer {
                 packed[packed_idx] = combined;
             }
         }
-        PreparedFramebuffer { packed, mode }
+        PreparedFramebuffer {
+            packed,
+            mode: draw_mode as EpdDrawMode
+                | EpdDrawMode_PREVIOUSLY_WHITE
+                | EpdDrawMode_MODE_PACKING_2PPB,
+        }
+    }
+
+    pub fn prepare_difference(
+        from_framebuffer: &Framebuffer,
+        to_framebuffer: &Framebuffer,
+        draw_mode: DrawMode,
+    ) -> PreparedFramebuffer {
+        let mut packed = vec![0; (WIDTH * HEIGHT) as usize];
+        for y in 0..HEIGHT {
+            for x in 0..WIDTH {
+                let packed_idx = (y * WIDTH + x) as usize;
+                let from = from_framebuffer.get(x, y);
+                let to = to_framebuffer.get(x, y);
+                let (from, to) = if matches!(draw_mode, DrawMode::DirectUpdateBinary) {
+                    (15 * (from >> 7), 15 * (to >> 7))
+                } else {
+                    (from >> 4, to >> 4)
+                };
+                let combined = to << 4 | from;
+                packed[packed_idx] = combined;
+            }
+        }
+        PreparedFramebuffer {
+            packed,
+            mode: draw_mode as EpdDrawMode | EpdDrawMode_MODE_PACKING_1PPB_DIFFERENCE,
+        }
     }
 }
