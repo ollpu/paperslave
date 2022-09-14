@@ -62,7 +62,7 @@ pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
                         continue 'redraw;
                     }
                 }
-                if dirty {
+                if dirty && local_state.changed {
                     tries += 1;
                     if tries >= 500 {
                         paper.powered_on().quick_clear();
