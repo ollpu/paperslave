@@ -56,20 +56,7 @@ fn main() {
     let draw_worker = thread::spawn(Core::Core1, || {
         let counter = find_counter_partition();
         let value = read_and_increment_counter(&counter);
-
-        let mut time = datetime_from_counter(value);
-
-        // Advance time up to a point given at compile time. This will only call
-        // `reset_and_write_counter` once after flashing, and normal operation will resume
-        // afterwards. Cannot be used to decrease the stored timestamp.
-        if let Some(set_time) = option_env!("PAPERSLAVE_ADVANCE_TIME") {
-            let set_time = NaiveDateTime::parse_from_str(set_time, "%Y-%m-%d %H:%M").unwrap();
-            if set_time > time {
-                time = set_time;
-                let value = counter_from_datetime(set_time);
-                set_counter(&counter, value);
-            }
-        }
+        let time = datetime_from_counter(value);
 
         let time_string = time.format("%H:%M").to_string();
         let date_string = time.format("%-d.%-m.%Y").to_string();
