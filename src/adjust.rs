@@ -9,7 +9,7 @@ use esp_idf_hal::{
 use crate::{
     fb::{Framebuffer, Paint, Rect},
     paper::{DrawMode, Paper, PreparedFramebuffer},
-    thread,
+    thread, clamp_datetime_to_counter, read_counter, datetime_from_counter, find_counter_partition, counter_from_datetime, set_counter,
 };
 
 pub struct AdjustButtons {
@@ -22,12 +22,15 @@ pub struct AdjustButtons {
 struct State {
     field: AdjustField,
     time: NaiveDateTime,
+    changed: bool,
 }
 
 pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
+    let partition = find_counter_partition();
     let state = std::sync::Arc::new(std::sync::Mutex::new(State {
         field: AdjustField::Years,
-        time: NaiveDateTime::from_timestamp(0, 0),
+        time: datetime_from_counter(read_counter(&partition)),
+        changed: false,
     }));
 
     // Draw thread
@@ -72,29 +75,6 @@ pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
         }
     });
 
-    fn press_latch(pin: &GpioPin<Input>, repeat: bool, mut cb: impl FnMut()) {
-        if pin.is_low().unwrap() {
-            cb();
-            for _ in 0..50 {
-                if pin.is_high().unwrap() {
-                    return;
-                }
-                FreeRtos.delay_ms(10u32);
-            }
-            loop {
-                if pin.is_high().unwrap() {
-                    return;
-                }
-                if repeat {
-                    cb();
-                    FreeRtos.delay_ms(200u32);
-                } else {
-                    FreeRtos.delay_ms(10u32);
-                }
-            }
-        }
-    }
-
     // Input loop
     loop {
         press_latch(&buttons.field_cycle, false, || {
@@ -104,20 +84,23 @@ pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
         press_latch(&buttons.backward, true, || {
             let mut state = state.lock().unwrap();
             state.time = adjust(state.field, AdjustDirection::Backward, state.time);
+            state.changed = true;
         });
         press_latch(&buttons.forward, true, || {
             let mut state = state.lock().unwrap();
             if matches!(state.field, AdjustField::Store) {
-                // TODO
+                set_counter(&partition, counter_from_datetime(state.time));
+                state.changed = false;
             } else {
                 state.time = adjust(state.field, AdjustDirection::Forward, state.time);
+                state.changed = true;
             }
         });
         FreeRtos.delay_ms(1u32);
     }
 }
 
-fn draw(framebuffer: &mut Framebuffer, local_state: &State) {
+fn draw(framebuffer: &mut Framebuffer, state: &State) {
     const BUTTONS_START: i32 = 240;
     const BUTTONS_SPACE: i32 = 69;
     for (i, text) in [Some("RST"), None, Some("NEXT"), Some("-"), Some("+")]
@@ -139,15 +122,15 @@ fn draw(framebuffer: &mut Framebuffer, local_state: &State) {
         }
     }
     for (part, x, y) in [
-        (AdjustField::Hours, 400, 200),
-        (AdjustField::Minutes, 560, 200),
-        (AdjustField::Days, 290, 320),
-        (AdjustField::Months, 450, 320),
-        (AdjustField::Years, 650, 320),
-        (AdjustField::Store, 480, 450),
+        (AdjustField::Hours, 400, 180),
+        (AdjustField::Minutes, 560, 180),
+        (AdjustField::Days, 290, 300),
+        (AdjustField::Months, 450, 300),
+        (AdjustField::Years, 650, 300),
+        (AdjustField::Store, 480, 430),
     ] {
-        framebuffer.text_centered(Paint::Darken, x, y, 94., &part.format(local_state.time));
-        if part == local_state.field {
+        framebuffer.text_centered(Paint::Darken, x, y, 94., &part.format(state.time));
+        if part == state.field {
             framebuffer.rect(
                 Paint::Darken,
                 Rect {
@@ -159,15 +142,41 @@ fn draw(framebuffer: &mut Framebuffer, local_state: &State) {
             );
         }
     }
+    if state.changed {
+        framebuffer.text_centered(Paint::Darken, 480, 480, 50., "not saved");
+    }
+}
+
+fn press_latch(pin: &GpioPin<Input>, repeat: bool, mut cb: impl FnMut()) {
+    if pin.is_low().unwrap() {
+        cb();
+        for _ in 0..50 {
+            if pin.is_high().unwrap() {
+                return;
+            }
+            FreeRtos.delay_ms(10u32);
+        }
+        loop {
+            if pin.is_high().unwrap() {
+                return;
+            }
+            if repeat {
+                cb();
+                FreeRtos.delay_ms(200u32);
+            } else {
+                FreeRtos.delay_ms(10u32);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum AdjustField {
-    Minutes,
-    Hours,
-    Days,
-    Months,
     Years,
+    Months,
+    Days,
+    Hours,
+    Minutes,
     Store,
 }
 
@@ -180,23 +189,23 @@ enum AdjustDirection {
 impl AdjustField {
     fn cycle(self) -> Self {
         match self {
-            AdjustField::Minutes => AdjustField::Hours,
-            AdjustField::Hours => AdjustField::Days,
-            AdjustField::Days => AdjustField::Months,
-            AdjustField::Months => AdjustField::Years,
-            AdjustField::Years => AdjustField::Store,
-            AdjustField::Store => AdjustField::Minutes,
+            AdjustField::Years => AdjustField::Months,
+            AdjustField::Months => AdjustField::Days,
+            AdjustField::Days => AdjustField::Hours,
+            AdjustField::Hours => AdjustField::Minutes,
+            AdjustField::Minutes => AdjustField::Store,
+            AdjustField::Store => AdjustField::Years,
         }
     }
 
     fn format(self, datetime: NaiveDateTime) -> String {
         let format_string = match self {
-            AdjustField::Minutes => "%M",
-            AdjustField::Hours => "%H",
-            AdjustField::Days => "%d",
-            AdjustField::Months => "%m",
             AdjustField::Years => "%Y",
-            AdjustField::Store => "OK",
+            AdjustField::Months => "%m",
+            AdjustField::Days => "%d",
+            AdjustField::Hours => "%H",
+            AdjustField::Minutes => "%M",
+            AdjustField::Store => "Save",
         };
         datetime.format(format_string).to_string()
     }
@@ -243,5 +252,5 @@ fn adjust(
         AdjustField::Store => {}
     }
     date = adjust_date_duration(date, chrono::Duration::seconds(overflow_days));
-    date.and_time(time)
+    clamp_datetime_to_counter(date.and_time(time))
 }

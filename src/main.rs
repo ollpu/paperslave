@@ -90,7 +90,9 @@ fn main() {
 
     FreeRtos.delay_ms(3000_u32);
 
+    #[cfg(debug_assertions)]
     println!("entering adjust mode");
+
     adjust_mode(
         paper,
         AdjustButtons {
@@ -130,9 +132,17 @@ fn find_counter_partition() -> esp_partition_t {
     }
 }
 
+fn read_counter(partition: &esp_partition_t) -> u32 {
+    read_and_increment_counter_impl(partition, false)
+}
+
+fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
+    read_and_increment_counter_impl(partition, true)
+}
+
 /// Monotonically increasing counter implementation which minimizes the use of the expensive flash
 /// erase operation.
-fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
+fn read_and_increment_counter_impl(partition: &esp_partition_t, increment: bool) -> u32 {
     let size = partition.size;
 
     let mut buffer = vec![0_u8; size as usize];
@@ -153,16 +163,20 @@ fn read_and_increment_counter(partition: &esp_partition_t) -> u32 {
         Some(&head_byte) => {
             unary_bits_head_byte = head_byte.leading_zeros();
 
-            let new_head_byte = head_byte >> 1;
-            let byte_index = 4 + unary_head_index as u32;
-            partition_write(partition, byte_index, &new_head_byte.to_be_bytes()).unwrap();
+            if increment {
+                let new_head_byte = head_byte >> 1;
+                let byte_index = 4 + unary_head_index as u32;
+                partition_write(partition, byte_index, &new_head_byte.to_be_bytes()).unwrap();
+            }
         }
         /* The offset unary counter is already full, reset it and update base. */
         None => {
             unary_bits_head_byte = 0;
 
-            let new_base = base + (size - 4) * 8 + 1;
-            set_counter(partition, new_base);
+            if increment {
+                let new_base = base + (size - 4) * 8 + 1;
+                set_counter(partition, new_base);
+            }
         }
     }
 
