@@ -15,4 +15,9 @@ Digital slave clock for Schneider Electric (aka ESMI, Westerstrand) minute pulse
 - Run `sudo cargo espflash` to compile and write the program to the microcontroller.
 
 ### How to use
-- Just plug the microcontroller to the wall with the adapter and it will work.
+- The project should be built in release mode for it to work on an actual
+  minute pulse signal. E.g., `cargo espflash --release`
+- Adjust time by plugging into a normal USB power supply and using the buttons
+  on the LilyGo unit. The time you set will be shown the *next time* the unit
+  boots up.
+- Just plug the microcontroller to the wall with the adapter and it should work.
