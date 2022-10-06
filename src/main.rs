@@ -1,8 +1,7 @@
-use std::ffi::{c_void, CString};
+use std::{ffi::{c_void, CString}, thread::sleep, time::Duration};
 
 use chrono::NaiveDateTime;
-use embedded_hal::blocking::delay::DelayMs;
-use esp_idf_hal::{cpu::Core, delay::FreeRtos, peripherals::Peripherals};
+use esp_idf_hal::{cpu::Core, peripherals::Peripherals};
 use esp_idf_sys::{
     self as _, esp_partition_erase_range, esp_partition_find_first, esp_partition_read,
     esp_partition_subtype_t_ESP_PARTITION_SUBTYPE_ANY, esp_partition_t,
@@ -49,7 +48,7 @@ fn main() {
     #[cfg(debug_assertions)]
     {
         println!("waiting for debug delay");
-        FreeRtos.delay_ms(2000_u32);
+        sleep(Duration::from_millis(2000));
         println!("wait over");
     }
 
@@ -75,7 +74,7 @@ fn main() {
         p.draw(&prepared);
     }
 
-    FreeRtos.delay_ms(3000_u32);
+    sleep(Duration::from_millis(3000));
 
     #[cfg(debug_assertions)]
     println!("entering adjust mode");

@@ -1,8 +1,9 @@
+use std::{thread::sleep, time::Duration};
+
 use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
-use embedded_hal::{blocking::delay::DelayMs, digital::v2::InputPin};
+use embedded_hal::digital::v2::InputPin;
 use esp_idf_hal::{
     cpu::Core,
-    delay::FreeRtos,
     gpio::{GpioPin, Input},
 };
 
@@ -53,7 +54,7 @@ pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
             std::mem::swap(&mut prev_framebuffer, &mut framebuffer);
             let mut tries = 0;
             loop {
-                FreeRtos.delay_ms(10u32);
+                sleep(Duration::from_millis(10));
                 {
                     let updated_state = worker_state.lock().unwrap();
                     if &*updated_state != &local_state {
@@ -96,7 +97,7 @@ pub fn adjust_mode(mut paper: Paper, buttons: AdjustButtons) {
                 state.changed = true;
             }
         });
-        FreeRtos.delay_ms(1u32);
+        sleep(Duration::from_millis(10));
     }
 }
 
@@ -154,7 +155,7 @@ fn press_latch(pin: &GpioPin<Input>, repeat: bool, mut cb: impl FnMut()) {
             if pin.is_high().unwrap() {
                 return;
             }
-            FreeRtos.delay_ms(10u32);
+            sleep(Duration::from_millis(10));
         }
         loop {
             if pin.is_high().unwrap() {
@@ -162,9 +163,9 @@ fn press_latch(pin: &GpioPin<Input>, repeat: bool, mut cb: impl FnMut()) {
             }
             if repeat {
                 cb();
-                FreeRtos.delay_ms(200u32);
+                sleep(Duration::from_millis(200));
             } else {
-                FreeRtos.delay_ms(10u32);
+                sleep(Duration::from_millis(10));
             }
         }
     }
